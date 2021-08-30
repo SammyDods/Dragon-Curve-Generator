@@ -1,0 +1,96 @@
+-- Live version https://macoutreach.rocks/share/52b6728e
+
+Dragon Curve
+
+myShapes model =
+[ openPolygon (genPoints model.degree [Fwd3, Fwd1])
+|> outlined (solid 1) red
+|> scale (2/(1+ (toFloat model.degree)^1.9))
+|> move(0,10 + 1.4*(toFloat model.degree))
+-- , text (Debug.toString model.points) |> size 2 |> filled red |> move (-94,-60)
+, controller
+|> notifyTapAt ClickControl
+, text (String.fromInt model.degree |> String.left 5)
+|> filled black
+|> move(8,-79.5)
+|> scale 0.6
+]
+
+-- Change level of recursion based off of n
+genPoints n list=
+if n <= 0 then
+ink list
+else
+genPoints (n-1) (rewrite list)
+
+-- L-System
+type Moves
+= Fwd1 | Fwd2 | Fwd3 | Right | Left
+
+-- L Rules
+rewriteOne move =
+case move of
+Fwd1 -> [Fwd1,Left,Fwd2,Fwd3,Left]
+Fwd2 -> [Right,Fwd3,Fwd1,Right,Fwd2]
+Fwd3 -> [Fwd3]
+Right -> [Right]
+Left -> [Left]
+
+-- applies the rewriteOne to all elments of the list, and then concatenates to produce a single list
+rewrite moves = List.concatMap rewriteOne moves
+
+type Turtle = Turtle (Float,Float) -- current position
+(Float,Float) -- current step direction
+(List (Float,Float)) -- history of where we've been
+
+-- get the history to draw the curve
+getPoints (Turtle _ _ points) = points
+
+-- where our turtle starts before drawing
+initTurtle = Turtle (0,0) (10,-10) [(0,0)]
+
+ink moves = List.foldl inkOne initTurtle moves
+|> getPoints
+
+inkOne move (Turtle (x,y) (dx,dy) pointsSoFar) =
+case move of
+Right -> Turtle (x,y) (dy,-dx) pointsSoFar
+Left -> Turtle (x,y) (-dy,dx) pointsSoFar
+_ -> let
+new = (x+dx,y+dy)
+in
+Turtle new (dx,dy) ( new :: pointsSoFar )
+
+controller = group
+( [ rectangle 192 20 |> filled (rgb 150 150 200)
+, text "Degree"
+|> customFont "cursive"
+|> size 6
+|> centered
+|> filled black
+|> move (-7,2.5)
+]
+++ ( List.map degreeNums (List.range 1 15) )
+)
+|> move (0,-50)
+
+-- Generate numbers for degree control
+degreeNums cm =
+group [ text (String.fromInt cm)
+|> size 4
+|> centered
+|> filled black
+|> move (0,-13)
+]
+|> move (180 * (toFloat cm - 8) / 15.5 ,8)
+
+-- Degree of curve based off of rounded X position on control
+update msg model = case msg of
+Tick t _ -> { model | time = t}
+ClickControl (x,y) -> { model | degree = round (x /180 * 15 +8)}
+
+init : { time : Float, degree : Int, points : List (Float,Float) }
+init = { time = 0, degree = 0, points = ink <| [Fwd3, Fwd1] }
+
+type Msg = Tick Float GetKeyState
+| ClickControl (Float,Float)
